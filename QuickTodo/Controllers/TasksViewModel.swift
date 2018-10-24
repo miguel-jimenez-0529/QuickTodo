@@ -22,6 +22,7 @@
 
 import Foundation
 import RxSwift
+import RxCocoa
 import RxDataSources
 import Action
 
@@ -50,7 +51,33 @@ struct TasksViewModel {
       ]
     })
   }
-
+  
+  var statistics : Driver<String> {
+    return self.taskService.statistics().map({ (todo, done) in
+      return "Todo: \(todo) Done:\(done)"
+    }).asDriver(onErrorJustReturn: "Error")
+  }
+  
+  lazy var editAction: Action<TaskItem, Swift.Never> = { this in
+    return Action { task in
+      let editViewModel = EditTaskViewModel(
+        task: task,
+        coordinator: this.sceneCoordinator,
+        updateAction: this.onUpdateTitle(task: task)
+      )
+      return this.sceneCoordinator
+        .transition(to: Scene.editTask(editViewModel), type: .modal)
+        .asObservable()
+    }
+  }(self)
+  
+  
+  lazy var deleteAction : Action<TaskItem, Void> = { this in
+    return Action(workFactory: { (task) in
+      return this.taskService.delete(task: task)
+    })
+  }(self)
+ 
   func onToggle(task: TaskItem) -> CocoaAction {
     return CocoaAction {
       return self.taskService.toggle(task: task).map { _ in }
@@ -67,5 +94,23 @@ struct TasksViewModel {
     return Action { newTitle in
       return self.taskService.update(task: task, title: newTitle).map { _ in }
     }
+  }
+  
+  func onCreateTask() -> CocoaAction {
+    
+    return CocoaAction(workFactory: { _ -> Observable<Void> in
+      return self.taskService
+        .createTask(title: "")
+        .flatMap({ (task) -> Observable<Void> in
+          let editViewModel = EditTaskViewModel(task:task,
+                                                coordinator: self.sceneCoordinator,
+                                                updateAction:self.onUpdateTitle(task: task),
+                                                cancelAction: self.onDelete(task: task))
+          return self.sceneCoordinator
+            .transition(to: Scene.editTask(editViewModel), type: .modal)
+            .asObservable()
+            .map {_ in}
+        })
+    })
   }
 }

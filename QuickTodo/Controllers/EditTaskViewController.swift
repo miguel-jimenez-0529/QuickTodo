@@ -36,7 +36,13 @@ class EditTaskViewController: UIViewController, BindableType {
 
   func bindViewModel() {
     titleView.text = viewModel.itemTitle
-
+    
+    cancelButton.rx.action = viewModel.onCancel
+    
+    okButton.rx.tap.withLatestFrom(titleView.rx.text.orEmpty)
+      .filter {!$0.isEmpty}
+      .subscribe(viewModel.onUpdate.inputs)
+      .disposed(by: self.rx.disposeBag)
   }
 
   override func viewDidAppear(_ animated: Bool) {

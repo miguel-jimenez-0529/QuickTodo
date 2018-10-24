@@ -40,28 +40,65 @@ class TasksViewController: UIViewController, BindableType {
     
     tableView.rowHeight = UITableViewAutomaticDimension
     tableView.estimatedRowHeight = 60
+    configureDataSource()
     
+    navigationItem.leftBarButtonItem = editButtonItem
   }
   
   func bindViewModel() {
+    viewModel.sectionedItems
+      .bind(to: tableView.rx.items(dataSource: dataSource))
+      .disposed(by: self.rx.disposeBag)
     
+    navigationItem.rightBarButtonItem?.rx.action = viewModel.onCreateTask()
+    navigationItem.leftBarButtonItem?.rx.tap
+      .do(onNext: {
+        print(self.isEditing)
+      })
+      .subscribe(onNext: { [unowned self] _ in
+        self.setEditing(!self.isEditing, animated: false)
+        self.tableView.isEditing = !self.isEditing
+      })
+      .disposed(by: self.rx.disposeBag)
+    
+    tableView.rx.itemSelected
+      .do(onNext: { [unowned self] indexPath in
+        self.tableView.deselectRow(at: indexPath, animated: false)
+      })
+      .map { [unowned self] indexPath in
+        try! self.dataSource.model(at: indexPath) as! TaskItem
+      }
+      .subscribe(viewModel.editAction.inputs)
+      .disposed(by: self.rx.disposeBag)
+    
+    tableView.rx.itemDeleted.map { [unowned self] indexPath in
+      try! self.dataSource.model(at: indexPath) as! TaskItem
+    }
+    .subscribe(viewModel.deleteAction.inputs)
+    .disposed(by: self.rx.disposeBag)
+    
+    viewModel.statistics
+      .drive(statisticsLabel.rx.text)
+      .disposed(by: self.rx.disposeBag)
   }
   
   fileprivate func configureDataSource() {
     dataSource = RxTableViewSectionedAnimatedDataSource<TaskSection>(
-      configureCell: {
-        [weak self] dataSource, tableView, indexPath, item in
+      configureCell: { [weak self] dataSource, tableView, indexPath, item in
         let cell = tableView.dequeueReusableCell(withIdentifier:
           "TaskItemCell", for: indexPath) as! TaskItemTableViewCell
         if let this = self {
-          cell.configure(with: item,
-                         action:this.viewModel.onToggle(task: item))
+          cell.configure(with: item,action:this.viewModel.onToggle(task: item))
         }
         return cell
       },
       titleForHeaderInSection: { dataSource, index in
         dataSource.sectionModels[index].model
-    })
+      }, canEditRowAtIndexPath: { [unowned self] _ ,_ in
+        return self.isEditing
+      }, canMoveRowAtIndexPath: { _ ,_ in
+        return true
+      })
   }
   
 }

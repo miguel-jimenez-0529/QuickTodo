@@ -25,8 +25,9 @@ import RealmSwift
 import RxSwift
 import RxRealm
 
-struct TaskService : TaskServiceType {
+typealias TaskStatistics = (todo: Int, done: Int)
 
+struct TaskService : TaskServiceType {
   init() {
     // create a few default tasks
     do {
@@ -110,6 +111,19 @@ struct TaskService : TaskServiceType {
       let realm = try Realm()
       let tasks = realm.objects(TaskItem.self)
       return Observable.collection(from: tasks)
+    }
+    return result ?? .empty()
+  }
+  
+  func statistics() -> Observable<TaskStatistics> {
+    let result = withRealm("getting statistics") { (realm) -> Observable<TaskStatistics> in
+      let tasks = realm.objects(TaskItem.self)
+      let dueTasks = tasks.filter("checked == nil")
+      return Observable.zip(
+        Observable.collection(from: tasks).map({$0.count}),
+        Observable.collection(from: dueTasks).map({$0.count})) { all, due in
+        return (todo: due, done: all - due)
+      }
     }
     return result ?? .empty()
   }
